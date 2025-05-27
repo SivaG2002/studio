@@ -16,28 +16,26 @@ interface Line {
 }
 
 let lineIdCounter = 0;
-const generateLineId = () => `line-${lineIdCounter++}`;
+const generateLineId = () => `line-${lineIdCounter++}`; // Managed globally for simplicity here, reset in createInitialLines
 
 export default function TerminalView() {
   const { promptName } = useSettings();
   const { commandToExecute, setCommandToExecute } = useCommand();
-  // currentPromptString is not directly used for rendering the prompt, 
-  // promptName is used directly in JSX. Can be removed if not used elsewhere.
-  // const currentPromptString = `${promptName}>`; 
 
-  const createInitialLines = useCallback((pName: string) => {
-    lineIdCounter = 0; // Reset counter before generating IDs
+  const createInitialLines = useCallback(() => {
+    lineIdCounter = 0; // Reset counter for unique IDs for this set of initial lines
     return [
-      { id: generateLineId(), content: `TermAI [Version ${APP_VERSION}] (Prompt: ${pName})`, type: "info" as const },
+      { id: generateLineId(), content: `TermAI [Version ${APP_VERSION}] (Prompt: ${promptName})`, type: "info" as const },
       { id: generateLineId(), content: "© TermAI CLI. All rights reserved.", type: "info" as const },
       { id: generateLineId(), content: <>&nbsp;</>, type: "info" as const },
     ];
-  }, []);
+  }, [promptName]); // Depends on promptName
 
-  const [lines, setLines] = useState<Line[]>(() => createInitialLines(promptName));
+  const [lines, setLines] = useState<Line[]>(() => createInitialLines());
   const [currentInput, setCurrentInput] = useState("");
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1); // Should be -1 or commandHistory.length initially
+  // historyIndex: -1 means current input, 0 to commandHistory.length - 1 means browsing history
+  const [historyIndex, setHistoryIndex] = useState(-1); 
   
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
@@ -47,9 +45,10 @@ export default function TerminalView() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setLines(createInitialLines(promptName));
-    // lineIdCounter is reset within createInitialLines and correctly incremented
-  }, [promptName, createInitialLines]);
+    setLines(createInitialLines());
+    // lineIdCounter is reset within createInitialLines and correctly incremented.
+    // createInitialLines dependency ensures this runs when promptName changes.
+  }, [createInitialLines]);
 
 
   const scrollToBottom = () => {
@@ -63,8 +62,10 @@ export default function TerminalView() {
   }, []);
 
   const addLine = useCallback((content: React.ReactNode, type: Line["type"]) => {
+    // Ensure lineIdCounter continues to increment correctly for dynamically added lines.
+    // generateLineId handles its own incrementing.
     setLines((prevLines) => [...prevLines, { id: generateLineId(), content, type }]);
-  }, []); // setLines is stable
+  }, []); // setLines from useState is stable and doesn't need to be in deps
 
   const processCommand = useCallback((commandStr: string) => {
     const [command, ...args] = commandStr.trim().split(/\s+/);
@@ -72,8 +73,8 @@ export default function TerminalView() {
 
     switch (command.toLowerCase()) {
       case "cls":
-        // Re-initialize lines using the createInitialLines pattern for consistency
-        setLines(createInitialLines(promptName));
+        // createInitialLines will use the current promptName due to its own useCallback dependency
+        setLines(createInitialLines()); 
         break;
       case "echo":
         addLine(fullArg || <>&nbsp;</>, "output");
@@ -95,6 +96,7 @@ export default function TerminalView() {
         addLine(new Date().toLocaleTimeString(), "output");
         break;
       case "ver":
+        // promptName is available in the closure of processCommand
         addLine(`CmdWeb [Version ${APP_VERSION}] (Prompt: ${promptName})`, "output");
         break;
       case "exit":
@@ -109,14 +111,16 @@ export default function TerminalView() {
         );
         break;
     }
-  }, [addLine, promptName, createInitialLines]); // Added createInitialLines dependency for 'cls'
+  }, [addLine, promptName, createInitialLines, setLines]); // setLines added due to 'cls' command
 
   const submitCommand = useCallback((commandToProcess: string) => {
     const trimmedCommand = commandToProcess.trim();
+    // Display the command with the prompt
     const displayInput = (
       <>
         <span className="text-prompt-gradient">{promptName}</span>
         <span className="text-cmd-prompt">&gt;</span>
+        {/* Replace spaces with non-breaking spaces for display */}
         {commandToProcess.replace(/ /g, '\u00A0')} 
       </>
     );
@@ -124,7 +128,8 @@ export default function TerminalView() {
 
     if (trimmedCommand) {
       processCommand(trimmedCommand);
-      // Check commandHistory state directly before updating
+      // Add to command history only if it's a new, non-empty command
+      // and not a duplicate of the immediate last command.
       setCommandHistory(prevCmdHistory => {
         if (prevCmdHistory.length === 0 || prevCmdHistory[prevCmdHistory.length - 1] !== trimmedCommand) {
           return [...prevCmdHistory, trimmedCommand];
@@ -132,16 +137,16 @@ export default function TerminalView() {
         return prevCmdHistory;
       });
     }
-  }, [promptName, processCommand, addLine]);
+  }, [promptName, processCommand, addLine]); // Dependencies are correct
 
 
   const handleInternalSubmit = useCallback(() => {
     submitCommand(currentInput);
     setCurrentInput(""); 
-    setHistoryIndex(commandHistory.length); // Reset history index after submit
+    setHistoryIndex(-1); // Reset history index to current input line
     setSuggestions([]);
     setActiveSuggestionIndex(-1);
-  }, [currentInput, submitCommand, commandHistory.length]);
+  }, [currentInput, submitCommand]); // commandHistory.length removed as setHistoryIndex is now -1
 
 
   useEffect(() => {
@@ -194,35 +199,44 @@ export default function TerminalView() {
       handleInternalSubmit();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (suggestions.length > 0 && activeSuggestionIndex !== -1) {
+      if (suggestions.length > 0 && activeSuggestionIndex !== -1) { // Cycle through suggestions
          setActiveSuggestionIndex(prev => (prev <= 0 ? suggestions.length - 1 : prev - 1));
-      } else if (suggestions.length > 0 && activeSuggestionIndex === -1) {
-        setActiveSuggestionIndex(suggestions.length -1);
-      }
-       else if (commandHistory.length > 0) {
-        const newIndex = historyIndex <= 0 ? 0 : historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setCurrentInput(commandHistory[newIndex] || "");
+      } else if (suggestions.length > 0 && activeSuggestionIndex === -1) { // Activate last suggestion
+        setActiveSuggestionIndex(suggestions.length - 1);
+      } else if (commandHistory.length > 0) { // Cycle through command history
+        if (historyIndex === -1) { // Currently on new input, go to last history item
+          const newIdx = commandHistory.length - 1;
+          setHistoryIndex(newIdx);
+          setCurrentInput(commandHistory[newIdx]);
+        } else if (historyIndex > 0) { // Go to previous history item
+          const newIdx = historyIndex - 1;
+          setHistoryIndex(newIdx);
+          setCurrentInput(commandHistory[newIdx]);
+        }
       }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (suggestions.length > 0 && activeSuggestionIndex !== -1) {
+      if (suggestions.length > 0 && activeSuggestionIndex !== -1) { // Cycle through suggestions
         setActiveSuggestionIndex(prev => (prev >= suggestions.length - 1 ? 0 : prev + 1));
-      } else if (suggestions.length > 0 && activeSuggestionIndex === -1){
+      } else if (suggestions.length > 0 && activeSuggestionIndex === -1) { // Activate first suggestion
          setActiveSuggestionIndex(0);
-      }
-      else if (commandHistory.length > 0) {
-        const newIndex = historyIndex >= commandHistory.length -1 ? commandHistory.length : historyIndex + 1;
-        setHistoryIndex(newIndex);
-        setCurrentInput(commandHistory[newIndex] || "");
-         if (newIndex === commandHistory.length) setCurrentInput("");
+      } else if (commandHistory.length > 0 && historyIndex !== -1) { // Cycle through command history
+        if (historyIndex < commandHistory.length - 1) { // Go to next history item
+          const newIdx = historyIndex + 1;
+          setHistoryIndex(newIdx);
+          setCurrentInput(commandHistory[newIdx]);
+        } else { // Was at last history item, go to current input line
+          setHistoryIndex(-1);
+          setCurrentInput(""); // Consider saving current typed input if needed
+        }
       }
     } else if (e.key === "Tab") {
       e.preventDefault();
       if (suggestions.length > 0) {
-        const suggestionToApply = suggestions[activeSuggestionIndex !== -1 ? activeSuggestionIndex : 0];
+        // Apply active suggestion or first suggestion if none active
+        const suggestionToApply = suggestions[activeSuggestionIndex > -1 ? activeSuggestionIndex : 0];
         if (suggestionToApply) {
-          setCurrentInput(suggestionToApply + " ");
+          setCurrentInput(suggestionToApply + " "); // Add space for easier next arg
           setSuggestions([]);
           setActiveSuggestionIndex(-1);
         }
@@ -231,11 +245,15 @@ export default function TerminalView() {
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    setCurrentInput(suggestion + " ");
+    setCurrentInput(suggestion + " "); // Add space for easier next arg
     setSuggestions([]);
     setActiveSuggestionIndex(-1);
-    inputRef.current?.focus();
+    inputRef.current?.focus(); // Keep focus on input
   };
+
+  // Debounce function utility (remains unchanged, but good to keep it co-located or in utils)
+  // function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) { ... }
+
 
   return (
     <div 
@@ -254,11 +272,8 @@ export default function TerminalView() {
               "text-cmd-info": line.type === "info",
             })}
           >
-            {line.type === 'input' && typeof line.content === 'object' && React.isValidElement(line.content) ? (
-              line.content 
-            ) : (
-              line.content 
-            )}
+            {/* Content can be simple text or complex JSX (e.g. for formatted input lines) */}
+            {line.content}
           </div>
         ))}
         <div className="flex items-center">
