@@ -17,25 +17,19 @@ interface HomeSectionProps {
 
 export default function HomeSection({ setActiveTab }: HomeSectionProps) {
   const [inputValue, setInputValue] = useState("");
-  const { setCommandToExecute } = useCommand();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { setPromptToSend } = useCommand();
 
-  const handleCommandSubmit = () => {
-    if (inputValue.trim() && !isProcessing) {
-      setIsProcessing(true);
-
-      setTimeout(() => {
-        setCommandToExecute(inputValue.trim());
-        setActiveTab("ai");
-        setInputValue("");
-        setIsProcessing(false);
-      }, 5000);
-    }
+  const handlePromptSubmit = () => {
+    const prompt = inputValue.trim();
+    if (!prompt) return;
+    setPromptToSend(prompt);
+    setActiveTab("ai");
+    setInputValue("");
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
-      handleCommandSubmit();
+      handlePromptSubmit();
     }
   };
 
@@ -58,7 +52,6 @@ export default function HomeSection({ setActiveTab }: HomeSectionProps) {
       <div
         className={cn(
           "relative w-full max-w-md mt-40 input-gradient-glow-wrapper rounded-full z-10",
-          isProcessing && "processing"
         )}
       >
         <Button
@@ -70,15 +63,12 @@ export default function HomeSection({ setActiveTab }: HomeSectionProps) {
             "focus-visible:ring-0 focus-visible:ring-offset-0"
           )}
           aria-label="AI Search"
-          onClick={handleCommandSubmit}
-          disabled={isProcessing}
+          onClick={handlePromptSubmit}
         >
           <Sparkles
             className={cn(
               "w-5 h-5",
-              isProcessing
-                ? "animate-processing-icon"
-                : "transition-colors group-hover:icon-hover-gradient"
+              "transition-colors group-hover:icon-hover-gradient"
             )}
             aria-hidden="true"
           />
@@ -93,8 +83,7 @@ export default function HomeSection({ setActiveTab }: HomeSectionProps) {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={isProcessing}
-          readOnly={isProcessing}
+          maxLength={8000}
         />
       </div>
     </div>

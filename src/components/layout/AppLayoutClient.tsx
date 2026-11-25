@@ -1,12 +1,9 @@
 
 "use client";
 
-import type { ReactNode } from 'react';
 import React, { useState } from 'react';
 import BottomNavbar, { type ActiveTab } from './BottomNavbar';
-import TerminalView from '@/components/cmd-web/TerminalView';
-// AISection is not directly rendered if 'ai' tab shows TerminalView
-// import AISection from '@/components/sections/AISection'; 
+import AISection from '@/components/sections/AISection';
 import NoteSection from '@/components/sections/NoteSection';
 import SettingsSection from '@/components/sections/SettingsSection';
 import HomeSection from '@/components/sections/HomeSection'; 
@@ -18,11 +15,7 @@ import Image from 'next/image';
 import logoImage from '@/assets/logo.png';
 
 
-interface AppLayoutClientProps {
-  children: ReactNode; 
-}
-
-export default function AppLayoutClient({ children }: AppLayoutClientProps) {
+export default function AppLayoutClient() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home'); 
 
   const renderContent = () => {
@@ -30,7 +23,7 @@ export default function AppLayoutClient({ children }: AppLayoutClientProps) {
       case 'home':
         return <HomeSection setActiveTab={setActiveTab} />; // Pass setActiveTab
       case 'ai':
-        return <TerminalView />; 
+        return <AISection />;
       case 'notes':
         return <NoteSection />;
       case 'settings':
