@@ -1,6 +1,5 @@
 "use client";
 
-import Cursor from "@/components/cmd-web/Cursor";
 import { Button } from "@/components/ui/button";
 import { useCommand } from "@/context/CommandContext";
 import { useSettings } from "@/context/SettingsContext";
@@ -339,15 +338,21 @@ export default function TerminalView() {
   }, [activeConversationId, conversations, isHydrated]);
 
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [currentInput, lines]);
+    terminalEndRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [lines]);
 
   useEffect(() => {
     return () => abortControllerRef.current?.abort();
   }, []);
 
   useEffect(() => {
-    if (isHydrated && !isGenerating) inputRef.current?.focus();
+    if (
+      isHydrated
+      && !isGenerating
+      && window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    ) {
+      inputRef.current?.focus();
+    }
   }, [isGenerating, isHydrated]);
 
   const addLine = useCallback((content: React.ReactNode, type: Line["type"]) => {
@@ -778,30 +783,28 @@ export default function TerminalView() {
                 : line.content}
           </div>
         ))}
-        <div className="flex items-center">
+        <div className="flex min-h-8 items-center">
           <span className="text-prompt-gradient">{promptName}</span>
           <span className="text-cmd-prompt">&gt;</span>
-          <span className="break-all text-cmd-input">{currentInput.replace(/ /g, "\u00A0")}</span>
-          <Cursor />
+          <input
+            ref={inputRef}
+            type="text"
+            value={currentInput}
+            onChange={(event) => setCurrentInput(event.target.value)}
+            onKeyDown={handleKeyDown}
+            onClick={(event) => event.stopPropagation()}
+            className="min-w-0 flex-1 bg-transparent p-0 text-cmd-input caret-current outline-none"
+            aria-label="Terminal chat prompt"
+            autoCapitalize="sentences"
+            autoCorrect="on"
+            autoComplete="off"
+            spellCheck
+            maxLength={MAX_MESSAGE_LENGTH}
+            disabled={!isHydrated || isGenerating}
+          />
         </div>
         <div ref={terminalEndRef} />
       </div>
-
-      <input
-        ref={inputRef}
-        type="text"
-        value={currentInput}
-        onChange={(event) => setCurrentInput(event.target.value)}
-        onKeyDown={handleKeyDown}
-        className="absolute -left-96 -top-96 h-0 w-0 opacity-0"
-        aria-label="Terminal chat prompt"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck="false"
-        maxLength={MAX_MESSAGE_LENGTH}
-        disabled={!isHydrated || isGenerating}
-      />
-
     </div>
   );
 }
