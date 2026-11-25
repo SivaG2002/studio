@@ -2,8 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { useCommand } from "@/context/CommandContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { useSettings } from "@/context/SettingsContext";
 import { cn } from "@/lib/utils";
+import { interpolate, localeTags, type TranslationKey } from "@/lib/translations";
 import type { ChatMessage, Conversation } from "@/types/chat";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
@@ -123,11 +125,11 @@ function readSavedChatState(raw: string): SavedChatState {
   };
 }
 
-function createConversation(): Conversation {
+function createConversation(title: string): Conversation {
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
-    title: "New conversation",
+    title,
     createdAt: now,
     updatedAt: now,
     messages: [],
@@ -142,27 +144,51 @@ function formatTerminalOutput(text: string): string {
     .replace(/`{1,3}/g, "");
 }
 
-async function getResponseError(response: Response): Promise<string> {
+const apiErrorKeys: Record<string, TranslationKey> = {
+  openrouter_not_configured: "api.notConfigured",
+  openrouter_unauthorized: "api.auth",
+  openrouter_no_credits: "api.credits",
+  rate_limited: "api.rateLimit",
+  upstream_rate_limited: "api.rateLimit",
+  upstream_unavailable: "api.unavailable",
+  upstream_failed: "api.failed",
+  connection_failed: "api.connection",
+  missing_stream: "api.noStream",
+  invalid_stream: "api.invalidStream",
+  interrupted_stream: "api.interrupted",
+  invalid_content_type: "api.contentType",
+  request_too_large: "api.tooLarge",
+  invalid_json: "api.invalidBody",
+  invalid_messages: "api.invalidMessages",
+  invalid_language: "api.invalidLanguage",
+};
+
+async function getResponseError(
+  response: Response,
+  t: (key: TranslationKey) => string,
+): Promise<string> {
   try {
     const body: unknown = await response.json();
-    if (isRecord(body) && isRecord(body.error) && typeof body.error.message === "string") {
-      return body.error.message;
+    if (isRecord(body) && isRecord(body.error) && typeof body.error.code === "string") {
+      const key = apiErrorKeys[body.error.code];
+      if (key) return t(key);
     }
   } catch {
-    // Fall through to the safe status-based message below.
+    return t("api.failed");
   }
 
-  if (response.status === 401) return "OpenRouter rejected the API key. Check the server configuration.";
-  if (response.status === 402) return "OpenRouter reports that this request has no available credits.";
-  if (response.status === 429) return "The AI service is busy. Please wait a moment and try again.";
-  return "The AI request failed. Please try again.";
+  if (response.status === 401) return t("api.auth");
+  if (response.status === 402) return t("api.credits");
+  if (response.status === 429) return t("api.rateLimit");
+  return t("api.failed");
 }
 
 async function consumeEventStream(
   response: Response,
   onContent: (content: string) => void,
+  t: (key: TranslationKey) => string,
 ): Promise<void> {
-  if (!response.body) throw new Error("The AI service returned no response stream.");
+  if (!response.body) throw new Error(t("api.noStream"));
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -184,10 +210,10 @@ async function consumeEventStream(
     try {
       payload = JSON.parse(data) as unknown;
     } catch {
-      throw new Error("The AI service returned an invalid response stream.");
+      throw new Error(t("api.invalidStream"));
     }
     if (!isRecord(payload) || !Array.isArray(payload.choices)) {
-      throw new Error("The AI service returned an invalid response stream.");
+      throw new Error(t("api.invalidStream"));
     }
 
     const firstChoice = payload.choices[0];
@@ -230,7 +256,7 @@ async function consumeEventStream(
     if (!receivedDone && buffer) processLine(buffer.replace(/\r$/, ""));
     if (!receivedDone && eventData.length > 0) dispatchEvent();
     if (!receivedDone) {
-      throw new Error("The connection ended before the AI response was complete. Please retry.");
+      throw new Error(t("api.interrupted"));
     }
   } finally {
     reader.releaseLock();
@@ -239,6 +265,7 @@ async function consumeEventStream(
 
 export default function TerminalView() {
   const { promptName } = useSettings();
+  const { language, t } = useLanguage();
   const {
     commandToExecute,
     setCommandToExecute,
@@ -249,11 +276,15 @@ export default function TerminalView() {
   const createInitialLines = useCallback(() => {
     lineIdCounter = 0;
     return [
-      { id: generateLineId(), content: `TermAI [Version ${APP_VERSION}] (Prompt: ${promptName})`, type: "info" as const },
-      { id: generateLineId(), content: "© TermAI CLI. All rights reserved.", type: "info" as const },
+      {
+        id: generateLineId(),
+        content: interpolate(t("terminal.banner"), { version: APP_VERSION, prompt: promptName }),
+        type: "info" as const,
+      },
+      { id: generateLineId(), content: t("terminal.copyright"), type: "info" as const },
       { id: generateLineId(), content: <>&nbsp;</>, type: "info" as const },
     ];
-  }, [promptName]);
+  }, [promptName, t]);
 
   const createConversationLines = useCallback((conversation: Conversation): Line[] => [
     ...createInitialLines(),
@@ -302,12 +333,12 @@ export default function TerminalView() {
       if (raw) savedState = readSavedChatState(raw);
     } catch (error) {
       console.error("Failed to restore chat history from localStorage.", error);
-      setStorageError("Saved chat history could not be read. A new conversation was started.");
+      setStorageError(t("terminal.storageLoadError"));
     }
 
     const restoredConversations = savedState.conversations.length > 0
       ? savedState.conversations
-      : [createConversation()];
+      : [createConversation(t("terminal.newConversation"))];
     const restoredActiveId = restoredConversations.some(
       (conversation) => conversation.id === savedState.activeConversationId,
     )
@@ -321,7 +352,7 @@ export default function TerminalView() {
     setActiveConversationId(restoredConversation.id);
     setLines(createConversationLines(restoredConversation));
     setIsHydrated(true);
-  }, [createConversationLines, isHydrated]);
+  }, [createConversationLines, isHydrated, t]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -333,9 +364,14 @@ export default function TerminalView() {
       setStorageError(null);
     } catch (error) {
       console.error("Failed to save chat history to localStorage.", error);
-      setStorageError("Chat history could not be saved in this browser.");
+      setStorageError(t("terminal.storageSaveError"));
     }
-  }, [activeConversationId, conversations, isHydrated]);
+  }, [activeConversationId, conversations, isHydrated, t]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setLines((current) => [...createInitialLines(), ...current.slice(3)]);
+  }, [createInitialLines, isHydrated]);
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: "auto" });
@@ -377,6 +413,7 @@ export default function TerminalView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          language,
           messages: history
             .filter((message) => message.text.trim())
             .slice(-MAX_CONTEXT_MESSAGES)
@@ -388,7 +425,7 @@ export default function TerminalView() {
         signal: controller.signal,
       });
 
-      if (!response.ok) throw new Error(await getResponseError(response));
+      if (!response.ok) throw new Error(await getResponseError(response, t));
 
       await consumeEventStream(response, (content) => {
         setConversations((current) => current.map((conversation) => {
@@ -407,16 +444,16 @@ export default function TerminalView() {
             content: (typeof line.content === "string" ? line.content : "") + content,
           }
           : line));
-      });
+      }, t);
     } catch (error) {
       if (controller.signal.aborted) {
         setRetryTurn(null);
         return;
       }
 
-      setRequestError(error instanceof Error
-        ? error.message
-        : "The AI request failed. Please try again.");
+      setRequestError(error instanceof TypeError ? t("api.connection") : (
+        error instanceof Error ? error.message : t("api.failed")
+      ));
       setRetryTurn(target);
     } finally {
       if (abortControllerRef.current === controller) {
@@ -425,13 +462,15 @@ export default function TerminalView() {
         setIsGenerating(false);
       }
     }
-  }, []);
+  }, [language, t]);
 
   const submitPrompt = useCallback(async (value: string) => {
     const text = value.trim();
     if (!text || text.length > MAX_MESSAGE_LENGTH || !isHydrated || !activeConversation) {
       if (text.length > MAX_MESSAGE_LENGTH) {
-        setRequestError(`Messages must be ${MAX_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`);
+        setRequestError(interpolate(t("terminal.tooLong"), {
+          length: MAX_MESSAGE_LENGTH.toLocaleString(localeTags[language]),
+        }));
       }
       return;
     }
@@ -490,7 +529,7 @@ export default function TerminalView() {
       ? previous
       : [...previous, text]);
     await generateResponse(target, history);
-  }, [activeConversation, generateResponse, isHydrated, promptName]);
+  }, [activeConversation, generateResponse, isHydrated, language, promptName, t]);
 
   const processCommand = useCallback((commandStr: string): boolean => {
     const [command, ...args] = commandStr.trim().split(/\s+/);
@@ -504,27 +543,27 @@ export default function TerminalView() {
         addLine(fullArg || <>&nbsp;</>, "output");
         return true;
       case "help":
-        addLine("Built-in commands: CLS, ECHO [text], DATE, TIME, VER, HELP, EXIT.", "output");
-        addLine("Any other text is sent to the AI assistant.", "info");
+        addLine(t("terminal.builtins"), "output");
+        addLine(t("terminal.otherPrompt"), "info");
         return true;
       case "date":
-        addLine(new Date().toDateString(), "output");
+        addLine(new Date().toLocaleDateString(localeTags[language], { dateStyle: "full" }), "output");
         return true;
       case "time":
-        addLine(new Date().toLocaleTimeString(), "output");
+        addLine(new Date().toLocaleTimeString(localeTags[language]), "output");
         return true;
       case "ver":
-        addLine(`CmdWeb [Version ${APP_VERSION}] (Prompt: ${promptName})`, "output");
+        addLine(interpolate(t("terminal.version"), { version: APP_VERSION, prompt: promptName }), "output");
         return true;
       case "exit":
-        addLine("Terminal session remains open.", "info");
+        addLine(t("terminal.sessionOpen"), "info");
         return true;
       case "":
         return true;
       default:
         return false;
     }
-  }, [addLine, createInitialLines, promptName]);
+  }, [addLine, createInitialLines, language, promptName, t]);
 
   const submitCommand = useCallback((value: string) => {
     if (abortControllerRef.current) return;
@@ -586,7 +625,7 @@ export default function TerminalView() {
 
   const handleNewConversation = () => {
     if (isGenerating) return;
-    const conversation = createConversation();
+    const conversation = createConversation(t("terminal.newConversation"));
     setConversations((current) => [conversation, ...current]);
     setActiveConversationId(conversation.id);
     setLines(createConversationLines(conversation));
@@ -598,12 +637,12 @@ export default function TerminalView() {
 
   const handleClearChat = () => {
     if (!activeConversation || activeConversation.messages.length === 0 || isGenerating) return;
-    if (!window.confirm("Clear all messages in this conversation?")) return;
+    if (!window.confirm(t("terminal.clearChatConfirm"))) return;
 
     const now = new Date().toISOString();
     const clearedConversation = {
       ...activeConversation,
-      title: "New conversation",
+      title: t("terminal.newConversation"),
       updatedAt: now,
       messages: [],
     };
@@ -621,17 +660,17 @@ export default function TerminalView() {
 
   const handleClearMemory = () => {
     if (isGenerating) return;
-    if (!window.confirm("Delete all saved conversations from this browser?")) return;
+    if (!window.confirm(t("terminal.clearMemoryConfirm"))) return;
 
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
       console.error("Failed to clear saved chat history from localStorage.", error);
-      setStorageError("Saved conversations could not be cleared in this browser.");
+      setStorageError(t("terminal.storageClearError"));
       return;
     }
 
-    const freshConversation = createConversation();
+    const freshConversation = createConversation(t("terminal.newConversation"));
     setConversations([freshConversation]);
     setActiveConversationId(freshConversation.id);
     setLines(createConversationLines(freshConversation));
@@ -707,7 +746,7 @@ export default function TerminalView() {
   return (
     <div className="flex h-full w-full flex-grow flex-col overflow-hidden focus:outline-none" tabIndex={-1}>
       <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-border/50 pb-2 text-sm">
-        <label htmlFor="conversation-select" className="text-muted-foreground">Chat history</label>
+        <label htmlFor="conversation-select" className="text-muted-foreground">{t("terminal.history")}</label>
         <select
           id="conversation-select"
           value={activeConversationId ?? ""}
@@ -716,11 +755,15 @@ export default function TerminalView() {
           className="max-w-56 rounded border border-border bg-background px-2 py-1 text-foreground"
         >
           {conversations.map((conversation) => (
-            <option key={conversation.id} value={conversation.id}>{conversation.title}</option>
+            <option key={conversation.id} value={conversation.id}>
+              {conversation.messages.length === 0
+                ? t("terminal.newConversation")
+                : conversation.title}
+            </option>
           ))}
         </select>
         <Button type="button" variant="outline" size="sm" onClick={handleNewConversation} disabled={!isHydrated || isGenerating}>
-          New chat
+          {t("terminal.newChat")}
         </Button>
         <Button
           type="button"
@@ -729,7 +772,7 @@ export default function TerminalView() {
           onClick={handleClearChat}
           disabled={!isHydrated || isGenerating || !activeConversation?.messages.length}
         >
-          Clear chat
+          {t("terminal.clearChat")}
         </Button>
         <Button
           type="button"
@@ -738,7 +781,7 @@ export default function TerminalView() {
           onClick={handleClearMemory}
           disabled={!isHydrated || isGenerating}
         >
-          Clear memory
+          {t("terminal.clearMemory")}
         </Button>
         {isGenerating && (
           <Button
@@ -747,12 +790,12 @@ export default function TerminalView() {
             size="sm"
             onClick={() => abortControllerRef.current?.abort()}
           >
-            Stop
+            {t("terminal.stop")}
           </Button>
         )}
         {retryTurn && !isGenerating && retryTurn.conversationId === activeConversationId && (
           <Button type="button" variant="outline" size="sm" onClick={() => void handleRetry()}>
-            Retry
+            {t("terminal.retry")}
           </Button>
         )}
         {(requestError || storageError) && (
@@ -777,7 +820,7 @@ export default function TerminalView() {
             })}
           >
             {generationTarget?.assistantMessageId === line.id && !line.content
-              ? <span className="animate-pulse">Thinking...</span>
+              ? <span className="animate-pulse">{t("terminal.thinking")}</span>
               : line.type === "output" && typeof line.content === "string"
                 ? formatTerminalOutput(line.content)
                 : line.content}
@@ -794,7 +837,7 @@ export default function TerminalView() {
             onKeyDown={handleKeyDown}
             onClick={(event) => event.stopPropagation()}
             className="min-w-0 flex-1 bg-transparent p-0 text-cmd-input caret-current outline-none"
-            aria-label="Terminal chat prompt"
+            aria-label={t("terminal.prompt")}
             autoCapitalize="sentences"
             autoCorrect="on"
             autoComplete="off"

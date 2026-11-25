@@ -10,6 +10,7 @@ import { Sparkles } from "lucide-react";
 import { useCommand } from "@/context/CommandContext";
 import type { ActiveTab } from "@/components/layout/BottomNavbar";
 import Particles from "@/components/ui/particles";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface HomeSectionProps {
   setActiveTab: Dispatch<SetStateAction<ActiveTab>>;
@@ -18,6 +19,7 @@ interface HomeSectionProps {
 export default function HomeSection({ setActiveTab }: HomeSectionProps) {
   const [inputValue, setInputValue] = useState("");
   const { setPromptToSend } = useCommand();
+  const { t } = useLanguage();
 
   const handlePromptSubmit = () => {
     const prompt = inputValue.trim();
@@ -46,7 +48,7 @@ export default function HomeSection({ setActiveTab }: HomeSectionProps) {
       />
 
       <h1 className="text-5xl font-bold mb-4 text-static-gradient-sweep relative z-10">
-        Welcome to TermAI
+        {t("home.welcome")}
       </h1>
 
       <div
@@ -62,7 +64,7 @@ export default function HomeSection({ setActiveTab }: HomeSectionProps) {
             "hover:bg-transparent",
             "focus-visible:ring-0 focus-visible:ring-offset-0"
           )}
-          aria-label="AI Search"
+          aria-label={t("home.promptButton")}
           onClick={handlePromptSubmit}
         >
           <Sparkles
@@ -75,7 +77,7 @@ export default function HomeSection({ setActiveTab }: HomeSectionProps) {
         </Button>
         <Input
           type="text"
-          placeholder="Ask me anything..."
+          placeholder={t("home.promptPlaceholder")}
           className={cn(
             "w-full pl-4 pr-12 py-3 text-base md:text-sm rounded-full bg-input text-foreground",
             "focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"

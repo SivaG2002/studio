@@ -6,7 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import type { Note } from "@/types/notes";
-import { formatDistanceToNow } from 'date-fns';
+import { useLanguage } from "@/context/LanguageContext";
+import { localeTags } from "@/lib/translations";
 
 
 interface NoteCardProps {
@@ -15,7 +16,9 @@ interface NoteCardProps {
 }
 
 export default function NoteCard({ note, onDelete }: NoteCardProps) {
-  const timeAgo = formatDistanceToNow(new Date(note.createdAt), { addSuffix: true });
+  const { language, t } = useLanguage();
+  const date = new Intl.DateTimeFormat(localeTags[language], { dateStyle: "medium" })
+    .format(new Date(note.createdAt));
 
   return (
     <Card className="flex flex-col h-full bg-card shadow-lg hover:shadow-xl transition-shadow duration-200">
@@ -28,12 +31,12 @@ export default function NoteCard({ note, onDelete }: NoteCardProps) {
         </p>
       </CardContent>
       <CardFooter className="flex justify-between items-center border-t pt-4 mt-auto">
-        <p className="text-xs text-muted-foreground">{timeAgo}</p>
+        <p className="text-xs text-muted-foreground">{date}</p>
         <Button
           variant="ghost"
           size="icon"
           onClick={() => onDelete(note.id)}
-          aria-label="Delete note"
+          aria-label={t("notes.delete")}
           className="text-destructive hover:bg-destructive/10"
         >
           <Trash2 className="h-4 w-4" />

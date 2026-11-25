@@ -5,6 +5,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { SettingsProvider } from '@/context/SettingsContext';
 import { CommandProvider } from '@/context/CommandContext';
+import { LanguageProvider } from '@/context/LanguageContext';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -29,12 +30,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-mono`}>
-        <SettingsProvider>
-          <CommandProvider>
-            {children}
-          </CommandProvider>
-        </SettingsProvider>
-        <Toaster />
+        <LanguageProvider>
+          <SettingsProvider>
+            <CommandProvider>
+              {children}
+            </CommandProvider>
+          </SettingsProvider>
+          <Toaster />
+        </LanguageProvider>
       </body>
     </html>
   );

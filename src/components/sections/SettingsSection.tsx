@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function SettingsSection() {
+  const { t } = useLanguage();
   const { promptName, setPromptName } = useSettings();
   const [localPromptName, setLocalPromptName] = useState(promptName);
 
@@ -20,24 +22,24 @@ export default function SettingsSection() {
     <div className="p-4 h-full flex flex-col items-center justify-center">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Settings</CardTitle>
-          <CardDescription>Customize your CmdWeb experience.</CardDescription>
+          <CardTitle>{t("settings.title")}</CardTitle>
+          <CardDescription>{t("settings.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="promptName">Prompt Prefix</Label>
+            <Label htmlFor="promptName">{t("settings.prefix")}</Label>
             <Input
               id="promptName"
               value={localPromptName}
               onChange={(e) => setLocalPromptName(e.target.value)}
-              placeholder="Enter prompt prefix (e.g., MyCLI)"
+              placeholder={t("settings.prefixPlaceholder")}
             />
             <p className="text-xs text-muted-foreground">
-              This is the text that appears before the `&gt;` in the command line.
+              {t("settings.prefixDescription")}
             </p>
           </div>
           <Button onClick={handleSave} className="w-full">
-            Save Settings
+            {t("settings.save")}
           </Button>
         </CardContent>
       </Card>

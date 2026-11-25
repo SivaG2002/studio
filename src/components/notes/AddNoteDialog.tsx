@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface AddNoteDialogProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ interface AddNoteDialogProps {
 }
 
 export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteDialogProps) {
+  const { t } = useLanguage();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +43,11 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
 
   const handleSave = () => {
     if (!title.trim()) {
-      setError("Title cannot be empty.");
+      setError(t("notes.titleRequired"));
       return;
     }
     if (!content.trim()) {
-      setError("Note content cannot be empty.");
+      setError(t("notes.contentRequired"));
       return;
     }
     setError(null); 
@@ -64,16 +66,16 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md bg-card">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Add New Note</DialogTitle>
+          <DialogTitle className="text-foreground">{t("notes.addTitle")}</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Fill in the details for your new note.
+            {t("notes.addDescription")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="title" className="text-foreground">
-              Title
+              {t("notes.titleLabel")}
             </Label>
             <div className="interactive-element-glow-wrapper rounded-md">
               <Input
@@ -81,14 +83,14 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full h-10 bg-input text-foreground placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                placeholder="Enter note title"
+                placeholder={t("notes.titlePlaceholder")}
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="content" className="text-foreground">
-              Note
+              {t("notes.contentLabel")}
             </Label>
             <div className="relative">
               <div className="interactive-element-glow-wrapper rounded-md">
@@ -97,7 +99,7 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   className="min-h-[120px] w-full pr-12 bg-input text-foreground placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0 resize-y"
-                  placeholder="Write your note here..."
+                  placeholder={t("notes.contentPlaceholder")}
                 />
               </div>
               <Button
@@ -108,7 +110,7 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
                   "group absolute right-2 top-2 h-8 w-8 p-1.5 z-10",
                   "hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 )}
-                aria-label="Summarize Note"
+                aria-label={t("notes.summarize")}
                 disabled={isSummarizing}
               >
                 <Sparkles
@@ -140,7 +142,7 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
                    "focus-visible:ring-0 focus-visible:ring-offset-0 active:scale-95"
                 )}
               >
-                Cancel
+                {t("notes.cancel")}
               </Button>
             </DialogClose>
           </div>
@@ -153,7 +155,7 @@ export default function AddNoteDialog({ isOpen, onOpenChange, onSave }: AddNoteD
                  "focus-visible:ring-0 focus-visible:ring-offset-0 active:scale-95"
               )}
             >
-              Save Note
+              {t("notes.save")}
             </Button>
           </div>
         </DialogFooter>

@@ -10,8 +10,10 @@ import AddNoteDialog from "@/components/notes/AddNoteDialog";
 import NoteCard from "@/components/notes/NoteCard";
 import type { Note } from "@/types/notes";
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function NoteSection() {
+  const { t } = useLanguage();
   const [notes, setNotes] = useState<Note[]>([]);
   const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
 
@@ -55,7 +57,7 @@ export default function NoteSection() {
   return (
     <div className="p-4 h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-foreground">Your Notes</h2>
+        <h2 className="text-2xl font-semibold text-foreground">{t("notes.title")}</h2>
         <div className="interactive-element-glow-wrapper rounded-full"> {/* Wrapper for the glow effect */}
           <Button
             onClick={() => setIsAddNoteDialogOpen(true)}
@@ -64,7 +66,7 @@ export default function NoteSection() {
               "focus-visible:ring-0 focus-visible:ring-offset-0 active:scale-95"
             )}
           >
-            <PlusCircle className="mr-2 h-5 w-5" /> Add Your Note
+            <PlusCircle className="mr-2 h-5 w-5" /> {t("notes.add")}
           </Button>
         </div>
       </div>
@@ -78,7 +80,7 @@ export default function NoteSection() {
       {notes.length === 0 ? (
         <div className="flex-grow flex items-center justify-center">
           <p className="text-muted-foreground text-lg">
-            No notes yet. Click "Add Your Note" to get started!
+            {t("notes.empty")}
           </p>
         </div>
       ) : (

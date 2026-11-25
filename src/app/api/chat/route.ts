@@ -12,11 +12,29 @@ const MAX_RATE_LIMIT_ENTRIES = 5_000;
 
 type ChatRole = "user" | "assistant";
 type ChatRequestMessage = { role: ChatRole; content: string };
+type ChatLanguage = "en" | "ml" | "th" | "hi" | "ta";
+
+const LANGUAGE_INSTRUCTIONS: Record<ChatLanguage, string> = {
+  en: "Reply in English unless the user explicitly asks for another language.",
+  ml: "Reply in Malayalam unless the user explicitly asks for another language.",
+  th: "Reply in Thai unless the user explicitly asks for another language.",
+  hi: "Reply in Hindi unless the user explicitly asks for another language.",
+  ta: "Reply in Tamil unless the user explicitly asks for another language.",
+};
 
 const rateLimitEntries = new Map<string, { count: number; resetAt: number }>();
 
-function errorResponse(message: string, status: number) {
-  return Response.json({ error: { message } }, { status });
+function errorResponse(code: string, message: string, status: number) {
+  return Response.json({ error: { code, message } }, { status });
+}
+
+function getLanguage(body: unknown): ChatLanguage | null {
+  if (!body || typeof body !== "object" || !("language" in body)) return "en";
+  const { language } = body;
+  return language === "en" || language === "ml" || language === "th"
+    || language === "hi" || language === "ta"
+    ? language
+    : null;
 }
 
 function getClientKey(request: NextRequest): string {
@@ -114,29 +132,33 @@ function validateMessages(body: unknown): ChatRequestMessage[] | null {
   return validated[validated.length - 1].role === "user" ? validated : null;
 }
 
-function getUpstreamError(status: number): { status: number; message: string } {
+function getUpstreamError(status: number): { code: string; status: number; message: string } {
   if (status === 401) {
-    return { status: 401, message: "OpenRouter rejected the API key. Check OPENROUTER_API_KEY in your server environment." };
+    return {
+      code: "openrouter_unauthorized",
+      status: 401,
+      message: "OpenRouter rejected the API key. Check OPENROUTER_API_KEY in your server environment.",
+    };
   }
   if (status === 402) {
-    return { status: 402, message: "OpenRouter reports that this request has no available credits." };
+    return { code: "openrouter_no_credits", status: 402, message: "OpenRouter reports that this request has no available credits." };
   }
   if (status === 429) {
-    return { status: 429, message: "The AI service is busy. Please wait a moment and try again." };
+    return { code: "upstream_rate_limited", status: 429, message: "The AI service is busy. Please wait a moment and try again." };
   }
   if (status >= 500) {
-    return { status: 500, message: "The AI service is temporarily unavailable. Please try again." };
+    return { code: "upstream_unavailable", status: 500, message: "The AI service is temporarily unavailable. Please try again." };
   }
-  return { status: 502, message: "The AI request could not be completed. Please try again." };
+  return { code: "upstream_failed", status: 502, message: "The AI request could not be completed. Please try again." };
 }
 
 export async function POST(request: NextRequest) {
   if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
-    return errorResponse("Request must use application/json.", 415);
+    return errorResponse("invalid_content_type", "Request must use application/json.", 415);
   }
 
   if (isRateLimited(request)) {
-    return errorResponse("Too many requests. Please wait a minute and try again.", 429);
+    return errorResponse("rate_limited", "Too many requests. Please wait a minute and try again.", 429);
   }
 
   let body: unknown;
@@ -144,17 +166,34 @@ export async function POST(request: NextRequest) {
     body = await readRequestBody(request);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid request body.";
-    return errorResponse(message, message === "Request body is too large." ? 413 : 400);
+    return errorResponse(
+      message === "Request body is too large." ? "request_too_large" : "invalid_json",
+      message,
+      message === "Request body is too large." ? 413 : 400,
+    );
+  }
+
+  const language = getLanguage(body);
+  if (!language) {
+    return errorResponse("invalid_language", "Choose a supported response language.", 400);
   }
 
   const messages = validateMessages(body);
   if (!messages) {
-    return errorResponse("Provide up to 40 valid user or assistant messages, ending with a user message.", 400);
+    return errorResponse(
+      "invalid_messages",
+      "Provide up to 40 valid user or assistant messages, ending with a user message.",
+      400,
+    );
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   if (!apiKey || apiKey === "your_api_key_here") {
-    return errorResponse("OpenRouter is not configured. Add OPENROUTER_API_KEY to the server environment.", 503);
+    return errorResponse(
+      "openrouter_not_configured",
+      "OpenRouter is not configured. Add OPENROUTER_API_KEY to the server environment.",
+      503,
+    );
   }
 
   const model = process.env.OPENROUTER_MODEL?.trim() || "openrouter/free";
@@ -167,22 +206,26 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model, messages, stream: true }),
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: LANGUAGE_INSTRUCTIONS[language] }, ...messages],
+        stream: true,
+      }),
       signal: request.signal,
     });
   } catch {
     if (request.signal.aborted) return new Response(null, { status: 499 });
-    return errorResponse("Could not connect to the AI service. Please try again.", 502);
+    return errorResponse("connection_failed", "Could not connect to the AI service. Please try again.", 502);
   }
 
   if (!upstream.ok) {
     await upstream.body?.cancel();
     const error = getUpstreamError(upstream.status);
-    return errorResponse(error.message, error.status);
+    return errorResponse(error.code, error.message, error.status);
   }
 
   if (!upstream.body) {
-    return errorResponse("The AI service did not return a response stream.", 502);
+    return errorResponse("missing_stream", "The AI service did not return a response stream.", 502);
   }
 
   return new Response(upstream.body, {
