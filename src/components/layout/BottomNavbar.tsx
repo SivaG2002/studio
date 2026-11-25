@@ -2,7 +2,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from 'react';
-import React, { useState } from 'react';
+import React from 'react';
 import { Home, BrainCircuit, NotebookText, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/context/LanguageContext';
@@ -23,21 +23,16 @@ const navItems = [
 ];
 
 export default function BottomNavbar({ activeTab, setActiveTab }: BottomNavbarProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const { t } = useLanguage();
 
   return (
     <nav
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        "fixed bottom-0 left-1/2 -translate-x-1/2 z-40 flex justify-center items-center h-16 bg-background/80 backdrop-blur-md border-t border-border rounded-t-lg shadow-lg",
-        "w-auto max-w-xs sm:max-w-sm md:max-w-md px-4", 
-        "transition-transform duration-300 ease-in-out",
-        !isHovered ? "translate-y-[calc(100%_-_0.7rem)]" : "translate-y-0" // Adjusted: 0.2rem visible (5% of 4rem height)
+        "fixed bottom-0 inset-x-0 z-40 flex h-16 justify-center items-center bg-background/80 backdrop-blur-md border-t border-border shadow-lg",
+        "px-1 sm:left-1/2 sm:right-auto sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:px-4 sm:rounded-t-lg"
       )}
     >
-      <div className="flex space-x-3 sm:space-x-4"> 
+      <div className="grid w-full grid-cols-4 sm:flex sm:justify-center sm:gap-3 md:gap-4">
         {navItems.map((item) => {
           const Icon = item.icon;
           const label = t(item.labelKey);
@@ -48,7 +43,7 @@ export default function BottomNavbar({ activeTab, setActiveTab }: BottomNavbarPr
               onClick={() => setActiveTab(item.targetTab)}
               aria-label={label}
               className={cn(
-                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors group",
+                "flex min-w-0 flex-col items-center justify-center rounded-lg px-1 py-2 transition-colors group sm:px-3",
                 isActive ? "" : "text-muted-foreground hover:text-foreground",
                 !isActive && "hover:bg-transparent" 
               )}
@@ -61,7 +56,7 @@ export default function BottomNavbar({ activeTab, setActiveTab }: BottomNavbarPr
               />
               <span
                 className={cn(
-                  "text-xs",
+                  "whitespace-nowrap text-xs leading-5",
                   isActive ? "text-gradient-active font-semibold" : "group-hover:icon-hover-gradient"
                 )}
               >

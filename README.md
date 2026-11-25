@@ -1,6 +1,6 @@
-# TermAI
+# NOX AI
 
-TermAI is a Next.js App Router application built with React and TypeScript. It includes a terminal-style interface, notes, settings, and an AI chat.
+NOX AI is a Next.js App Router application built with React and TypeScript. It includes a terminal-style interface, notes, settings, and an AI chat.
 
 ## Run locally
 

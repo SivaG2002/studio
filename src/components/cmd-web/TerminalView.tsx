@@ -34,6 +34,16 @@ interface SavedChatState {
 let lineIdCounter = 0;
 const generateLineId = () => `line-${lineIdCounter++}`;
 
+let messageIdCounter = 0;
+const generateId = () => {
+  if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  messageIdCounter += 1;
+  return `${Date.now().toString(36)}-${messageIdCounter.toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -128,7 +138,7 @@ function readSavedChatState(raw: string): SavedChatState {
 function createConversation(title: string): Conversation {
   const now = new Date().toISOString();
   return {
-    id: crypto.randomUUID(),
+    id: generateId(),
     title,
     createdAt: now,
     updatedAt: now,
@@ -478,13 +488,13 @@ export default function TerminalView() {
 
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       text,
       sender: "user",
       createdAt: now,
     };
     const assistantMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       text: "",
       sender: "ai",
       createdAt: now,
